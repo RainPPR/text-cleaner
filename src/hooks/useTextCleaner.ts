@@ -1,18 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CleanerOptions, ProcessingStatus, ModeType } from '../types';
-import { formatBasicText, formatAIText } from '../services/api';
+import { CleanerOptions, ProcessingStatus } from '../types';
+import { formatBasicText } from '../services/api';
 
 export function useTextCleaner() {
   const [originalText, setOriginalText] = useState('');
   const [processedText, setProcessedText] = useState('');
 
-  // Options State
+  // Options State: simple clean options
   const [options, setOptions] = useState<CleanerOptions>({
     removeFigureNotes: true,
     strictNowrap: false,
-    useAIMode: false,
-    round1Mode: 'pangu',
-    round2Mode: 'autocorrect',
   });
 
   // UI state
@@ -63,27 +60,11 @@ export function useTextCleaner() {
       const basicResult = await formatBasicText({
         text: originalText,
         removeFigureNotes: options.removeFigureNotes,
-        round1: options.round1Mode,
-        round2: options.round2Mode,
         strictNowrap: options.strictNowrap,
       });
 
-      if (!options.useAIMode) {
-        setStatus('success');
-        setProcessedText(basicResult);
-        setIsDiffMode(true);
-        return;
-      }
-
-      setStatus('ai-thinking');
-      const aiResult = await formatAIText({
-        originalText,
-        basicProcessedText: basicResult,
-        removeFigureNotes: options.removeFigureNotes,
-      });
-
       setStatus('success');
-      setProcessedText(aiResult);
+      setProcessedText(basicResult);
       setIsDiffMode(true);
     } catch (err: any) {
       console.error(err);
