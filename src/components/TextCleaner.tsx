@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, Wand2, Settings, Loader2, CheckCircle2, Copy, Trash2, Check, FileDiff, Eye, FileText } from 'lucide-react';
-import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued';
+import { ArrowRight, Wand2, Settings, Loader2, CheckCircle2, Copy, Trash2, Check, FileDiff, Eye, FileText, CheckSquare } from 'lucide-react';
+import { diffChars, diffLines } from 'diff';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -9,16 +9,150 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import 'katex/dist/katex.min.css';
 
-import Prism from 'prismjs';
-import 'prismjs/themes/prism.css';
-import 'prismjs/components/prism-markup';
-import 'prismjs/components/prism-css';
-import 'prismjs/components/prism-javascript';
-import 'prismjs/components/prism-typescript';
-import 'prismjs/components/prism-jsx';
-import 'prismjs/components/prism-tsx';
-import 'prismjs/components/prism-json';
-import 'prismjs/components/prism-markdown';
+// Custom Inline Diff Viewer component for character-level changes
+function InlineDiff({ oldValue, newValue }: { oldValue: string; newValue: string }) {
+  const diffs = diffChars(oldValue, newValue);
+
+  return (
+    <div id="inline-diff-content" className="p-4 overflow-auto font-mono text-sm leading-relaxed text-gray-800 whitespace-pre-wrap break-all h-full bg-[#fdfdfd] border border-gray-100 rounded-lg select-text selection:bg-indigo-100">
+      {diffs.map((part, index) => {
+        if (part.added) {
+          return (
+            <span
+              key={index}
+              className="bg-emerald-100 text-emerald-950 border-b-2 border-emerald-400 px-0.5 py-[1px] rounded-sm font-semibold mx-[1px]"
+              title="新增内容"
+            >
+              {part.value}
+            </span>
+          );
+        }
+        if (part.removed) {
+          return (
+            <span
+              key={index}
+              className="bg-red-100 text-red-900 line-through decoration-red-400 decoration-2 px-0.5 py-[1px] rounded-sm opacity-80 mx-[1px]"
+              title="删除内容"
+            >
+              {part.value}
+            </span>
+          );
+        }
+        return <span key={index}>{part.value}</span>;
+      })}
+    </div>
+  );
+}
+
+// Custom Line Diff Viewer component
+function UnifiedLineDiff({ oldValue, newValue }: { oldValue: string; newValue: string }) {
+  const parts = diffLines(oldValue, newValue);
+  
+  let oldLineNo = 1;
+  let newLineNo = 1;
+  const renderedLines: React.ReactNode[] = [];
+  
+  parts.forEach((part, partIndex) => {
+    const lines = part.value.split('\n');
+    if (lines[lines.length - 1] === '') {
+      lines.pop();
+    }
+    
+    lines.forEach((line, lineIndex) => {
+      const key = `${partIndex}-${lineIndex}`;
+      
+      if (part.added) {
+        renderedLines.push(
+          <div key={key} className="flex hover:bg-emerald-50/80 bg-emerald-50/40 border-l-4 border-emerald-500 py-0.5 text-xs font-mono">
+            <div className="w-10 text-right pr-2 text-gray-400 select-none border-r border-gray-150 shrink-0"></div>
+            <div className="w-10 text-right pr-2 text-emerald-600 select-none border-r border-gray-150 shrink-0">{newLineNo++}</div>
+            <div className="w-6 text-center text-emerald-600 font-bold select-none shrink-0">+</div>
+            <div className="flex-1 pl-2 text-emerald-900 whitespace-pre-wrap break-all">{line}</div>
+          </div>
+        );
+      } else if (part.removed) {
+        renderedLines.push(
+          <div key={key} className="flex hover:bg-red-50/80 bg-red-50/40 border-l-4 border-red-500 py-0.5 text-xs font-mono">
+            <div className="w-10 text-right pr-2 text-red-600 select-none border-r border-gray-150 shrink-0">{oldLineNo++}</div>
+            <div className="w-10 text-right pr-2 text-gray-400 select-none border-r border-gray-150 shrink-0"></div>
+            <div className="w-6 text-center text-red-600 font-bold select-none shrink-0">-</div>
+            <div className="flex-1 pl-2 text-red-900 line-through decoration-red-300 decoration-1 whitespace-pre-wrap break-all opacity-75">{line}</div>
+          </div>
+        );
+      } else {
+        renderedLines.push(
+          <div key={key} className="flex hover:bg-gray-100/60 py-0.5 text-xs font-mono">
+            <div className="w-10 text-right pr-2 text-gray-400 select-none border-r border-gray-150 shrink-0">{oldLineNo++}</div>
+            <div className="w-10 text-right pr-2 text-gray-400 select-none border-r border-gray-150 shrink-0">{newLineNo++}</div>
+            <div className="w-6 text-center text-gray-300 select-none shrink-0"> </div>
+            <div className="flex-1 pl-2 text-gray-700 whitespace-pre-wrap break-all">{line}</div>
+          </div>
+        );
+      }
+    });
+  });
+
+  return (
+    <div className="overflow-auto h-full bg-[#fdfdfd] border border-gray-100 rounded-lg flex flex-col min-h-0 select-text">
+      <div className="flex-1 overflow-auto py-2">
+        {renderedLines.length === 0 ? (
+          <div className="p-8 text-center text-gray-400 text-sm">文本无任何明显差异</div>
+        ) : (
+          renderedLines
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Master Custom Diff Viewer container component
+function CustomDiffViewer({ oldValue, newValue }: { oldValue: string; newValue: string }) {
+  const [diffViewMode, setDiffViewMode] = useState<'inline' | 'unified'>('inline');
+
+  return (
+    <div id="custom-diff-viewer-panel" className="flex flex-col h-full min-h-0 bg-white rounded-lg">
+      {/* Mini diff toolbar */}
+      <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-3 py-2 shrink-0 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-gray-500">对比方式:</span>
+          <div className="inline-flex rounded-md shadow-xs bg-gray-100 p-0.5">
+            <button
+              onClick={() => setDiffViewMode('inline')}
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-sm transition-all focus:outline-none ${diffViewMode === 'inline' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-950'}`}
+            >
+              全文对比 (Inline)
+            </button>
+            <button
+              onClick={() => setDiffViewMode('unified')}
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-sm transition-all focus:outline-none ${diffViewMode === 'unified' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-950'}`}
+            >
+              分行对照 (Unified)
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 select-none text-[11px] font-medium text-gray-500">
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 bg-red-100 border border-red-300 rounded inline-block"></span>
+            <span>原文已删</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 bg-emerald-100 border border-emerald-300 rounded inline-block"></span>
+            <span>清洗已加</span>
+          </span>
+        </div>
+      </div>
+      
+      {/* Content pane */}
+      <div className="flex-1 min-h-0 mt-2">
+        {diffViewMode === 'inline' ? (
+          <InlineDiff oldValue={oldValue} newValue={newValue} />
+        ) : (
+          <UnifiedLineDiff oldValue={oldValue} newValue={newValue} />
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function TextCleaner() {
   const [originalText, setOriginalText] = useState('');
@@ -35,14 +169,14 @@ export default function TextCleaner() {
 
   const [status, setStatus] = useState<'idle' | 'cleaning' | 'ai-thinking' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
-  const [copiedArea, setCopiedArea] = useState<'original' | 'processed' | 'diff'>('original');
+  const [copiedArea, setCopiedArea] = useState<string | null>(null);
 
-  const copyToClipboard = async (text: string, area: 'original' | 'processed' | 'diff') => {
+  const copyToClipboard = async (text: string, area: string) => {
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
       setCopiedArea(area);
-      setTimeout(() => setCopiedArea('original'), 2000);
+      setTimeout(() => setCopiedArea(null), 2000);
     } catch (err) {}
   };
 
@@ -53,24 +187,6 @@ export default function TextCleaner() {
     setErrorMessage('');
     setIsDiffMode(false);
     setIsPreviewMode(false);
-  };
-
-  const highlightSyntax = (str: string) => {
-    if (!str) return undefined;
-    try {
-      const language = Prism.languages.markdown || Prism.languages.markup;
-      if (!language) return <span>{str}</span>;
-      
-      const html = Prism.highlight(str, language, 'markdown');
-      return (
-        <span
-          style={{ display: 'inline', whiteSpace: 'pre-wrap' }}
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-      );
-    } catch (err) {
-      return <span>{str}</span>;
-    }
   };
 
   const handleClean = async () => {
@@ -105,6 +221,7 @@ export default function TextCleaner() {
       if (!useAIMode) {
         setStatus('success');
         setProcessedText(finalResult);
+        setIsDiffMode(true); // Automatically switch to diff mode to show the beautiful comparison!
         return;
       }
 
@@ -130,6 +247,7 @@ export default function TextCleaner() {
 
       setProcessedText(aiData.result);
       setStatus('success');
+      setIsDiffMode(true); // Automatically switch to diff mode to show the beautiful comparison!
     } catch (err: any) {
       console.error(err);
       setStatus('error');
@@ -159,18 +277,18 @@ export default function TextCleaner() {
 
       {/* 主工作区 */}
       <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0">
-        {/* 左侧：输入区 */}
-        <div className="flex-1 flex flex-col min-h-0 group bg-gray-50 rounded-xl overflow-hidden border border-gray-200 focus-within:border-indigo-400 focus-within:ring-1 focus-within:ring-indigo-400 transition-all">
+        {/* 左侧：输入区 / Diff区域 */}
+        <div className="flex-1 flex flex-col min-h-0 bg-gray-50 rounded-xl overflow-hidden border border-gray-200 focus-within:border-indigo-400 focus-within:ring-1 focus-within:ring-indigo-400 transition-all shadow-xs">
           <div className="p-3 bg-gray-100/50 border-b border-gray-200 flex justify-between items-center text-sm font-medium text-gray-600">
             <div className="flex items-center gap-3">
               <span>{isDiffMode ? '差异对比' : '原文输入'}</span>
-              {status === 'success' && (
+              {processedText && (
                 <button
                   onClick={() => setIsDiffMode(!isDiffMode)}
-                  className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${isDiffMode ? 'bg-indigo-100 text-indigo-700' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${isDiffMode ? 'bg-indigo-600 text-white font-medium shadow-xs' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-905 shadow-3xs'}`}
                 >
-                  <FileDiff className="w-3 h-3" />
-                  <span className="text-[11px] font-semibold tracking-wide">Diff</span>
+                  <FileDiff className="w-3.5 h-3.5" />
+                  <span className="text-[11px] font-semibold tracking-wide">Diff 对比模式</span>
                 </button>
               )}
             </div>
@@ -179,43 +297,42 @@ export default function TextCleaner() {
             </span>
           </div>
           
-          {isDiffMode && status === 'success' ? (
-            <div className="flex-1 w-full bg-[#fdfdfd] overflow-auto text-sm font-sans">
-              <ReactDiffViewer
+          {isDiffMode ? (
+            <div className="flex-1 w-full bg-[#fdfdfd] p-3 overflow-hidden flex flex-col min-h-0">
+              <CustomDiffViewer
                 oldValue={originalText}
                 newValue={processedText}
-                splitView={false}
-                hideLineNumbers={false}
-                useDarkTheme={false}
-                compareMethod={DiffMethod.CHARS}
-                renderContent={highlightSyntax}
-                styles={{
-                  variables: {
-                    light: {
-                      diffViewerBackground: '#fdfdfd',
-                    }
-                  }
-                }}
               />
             </div>
           ) : (
             <textarea
-              className="flex-1 w-full bg-transparent p-4 resize-none outline-none text-gray-800 leading-relaxed"
+              className="flex-1 w-full bg-transparent p-4 resize-none outline-none text-gray-805 leading-relaxed font-sans placeholder:text-gray-400 selection:bg-indigo-100"
               placeholder="请将需要清洗的文字粘贴到这里..."
               value={originalText}
               onChange={(e) => setOriginalText(e.target.value)}
             />
           )}
 
-          <div className="p-2 border-t border-gray-200 bg-gray-100/50 flex justify-end items-center">
+          <div className="p-2 border-t border-gray-200 bg-gray-100/50 flex justify-end items-center gap-2">
             {isDiffMode ? (
-              <span className="text-xs text-gray-400 px-3 py-1.5">Diff 模式下无法编辑</span>
+              <>
+                <span className="text-xs text-gray-400 mr-auto pl-2">Diff 模式已开启，右侧展示原文对照</span>
+                <button
+                   onClick={() => copyToClipboard(processedText, 'cleaned_res')}
+                   disabled={!processedText}
+                   className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors font-medium border border-indigo-100"
+                   title="直接复制清洗后的最终结果"
+                >
+                   {copiedArea === 'cleaned_res' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <CheckSquare className="w-3.5 h-3.5" />}
+                   <span>{copiedArea === 'cleaned_res' ? '已复制结果' : '复制清洗结果'}</span>
+                </button>
+              </>
             ) : (
               <button
                  onClick={() => copyToClipboard(originalText, 'original')}
                  disabled={!originalText}
-                 className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-md text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-50 transition-colors"
-                 title="复制原文"
+                 className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-md text-gray-650 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-50 transition-colors font-medium"
+                 title="复制原输入文本"
               >
                  {copiedArea === 'original' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                  <span>{copiedArea === 'original' ? '已复制' : '复制原文'}</span>
@@ -229,7 +346,7 @@ export default function TextCleaner() {
           <button
             onClick={handleClean}
             disabled={status === 'cleaning' || status === 'ai-thinking' || !originalText.trim()}
-            className="group relative h-12 w-12 flex items-center justify-center rounded-full bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="group relative h-12 w-12 flex items-center justify-center rounded-full bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 cursor-pointer"
             title="开始清洗"
           >
             {status === 'cleaning' || status === 'ai-thinking' ? (
@@ -241,17 +358,17 @@ export default function TextCleaner() {
         </div>
 
         {/* 右侧：输出区 */}
-        <div className="flex-1 flex flex-col min-h-0 group bg-white rounded-xl overflow-hidden border border-gray-200">
+        <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl overflow-hidden border border-gray-200 shadow-xs">
           <div className="p-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center text-sm font-medium text-gray-600">
             <div className="flex items-center gap-3">
-              <span>{isDiffMode ? '原文内容' : '清洗结果'}</span>
-              {status === 'success' && !isDiffMode && (
+              <span>{isDiffMode ? '原文对照 (ReadOnly)' : '清洗结果'}</span>
+              {!isDiffMode && processedText && (
                 <button
                   onClick={() => setIsPreviewMode(!isPreviewMode)}
-                  className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors ${isPreviewMode ? 'bg-indigo-100 text-indigo-700' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${isPreviewMode ? 'bg-[#e0e7ff] text-indigo-700 font-medium' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                 >
-                  {isPreviewMode ? <FileText className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                  <span className="text-[11px] font-semibold tracking-wide">预览</span>
+                  {isPreviewMode ? <FileText className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  <span className="text-[11px] font-semibold tracking-wide">Markdown 预览</span>
                 </button>
               )}
             </div>
@@ -290,23 +407,35 @@ export default function TextCleaner() {
             </div>
           ) : (
             <textarea
-              className="flex-1 w-full bg-transparent p-4 resize-none outline-none text-gray-800 leading-relaxed selection:bg-indigo-100"
-              placeholder={isDiffMode ? "在此查看原文..." : "清洗后的文字将显示在这里..."}
+              className="flex-1 w-full bg-transparent p-4 resize-none outline-none text-gray-805 leading-relaxed selection:bg-indigo-100 placeholder:text-gray-450"
+              placeholder={isDiffMode ? "在这里对照原文..." : "清洗后的文字将显示在这里..."}
               value={isDiffMode ? originalText : processedText}
               readOnly
             />
           )}
 
           <div className="p-2 border-t border-gray-200 bg-gray-50 flex justify-end items-center">
-            <button
-               onClick={() => copyToClipboard(isDiffMode ? originalText : processedText, isDiffMode ? 'original' : 'processed')}
-               disabled={isDiffMode ? !originalText : !processedText}
-               className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-md text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-50 transition-colors"
-               title={isDiffMode ? "复制原文" : "复制结果"}
-            >
-               {copiedArea === (isDiffMode ? 'original' : 'processed') ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-               <span>{copiedArea === (isDiffMode ? 'original' : 'processed') ? '已复制' : (isDiffMode ? "复制原文" : "复制结果")}</span>
-            </button>
+            {isDiffMode ? (
+              <button
+                 onClick={() => copyToClipboard(originalText, 'original_right')}
+                 disabled={!originalText}
+                 className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-md text-gray-600 hover:text-indigo-650 hover:bg-indigo-50 disabled:opacity-50 transition-colors font-medium"
+                 title="复制原文文本以进行外部对比"
+              >
+                 {copiedArea === 'original_right' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                 <span>{copiedArea === 'original_right' ? '已复制原文' : '复制原文'}</span>
+              </button>
+            ) : (
+              <button
+                 onClick={() => copyToClipboard(processedText, 'processed_right')}
+                 disabled={!processedText}
+                 className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-md text-indigo-700 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 disabled:opacity-50 transition-colors font-semibold"
+                 title="复制清洗格式化后的结果"
+              >
+                 {copiedArea === 'processed_right' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                 <span>{copiedArea === 'processed_right' ? '已复制结果' : '复制结果'}</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
