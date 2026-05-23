@@ -25,7 +25,7 @@ export default function TextCleaner() {
   } = useTextCleaner();
 
   return (
-    <div className="w-full max-w-7xl mx-auto min-h-[calc(100vh-2rem)] flex flex-col p-4 md:p-6 space-y-5">
+    <div className="w-full max-w-7xl mx-auto lg:h-[calc(100vh-3rem)] lg:min-h-[750px] flex flex-col p-4 md:p-6 space-y-5 overflow-hidden">
       {/* 头部标题区域 */}
       <header className="flex-shrink-0 flex flex-col md:flex-row md:items-center md:justify-between border-b pb-5 border-gray-200 gap-4">
         <div>
@@ -58,11 +58,11 @@ export default function TextCleaner() {
         </div>
       </header>
 
-      {/* 主工作区 - min-h is increased for a spacious layout */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-5 min-h-[500px] lg:min-h-[640px]">
+      {/* 主工作区 - min-h-0 prevents the flexbox from flowing offscreen on desktop */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-5 min-h-0">
         {/* 左侧：输入区 / Diff区域 */}
-        <div className="flex-1 flex flex-col min-h-0 bg-gray-50 rounded-xl overflow-hidden border border-gray-200 focus-within:border-indigo-400 focus-within:ring-1 focus-within:ring-indigo-400 transition-all shadow-xs">
-          <div className="p-3.5 bg-gray-100/60 border-b border-gray-200 flex justify-between items-center text-sm font-medium text-gray-655">
+        <div className="flex-1 h-[380px] md:h-[480px] lg:h-full flex flex-col min-h-0 bg-gray-55 rounded-xl overflow-hidden border border-gray-200 focus-within:border-indigo-400 focus-within:ring-1 focus-within:ring-indigo-400 transition-all shadow-xs">
+          <div className="p-3.5 bg-gray-100/60 border-b border-gray-200 flex justify-between items-center text-sm font-medium text-gray-655 shrink-0 select-none">
             <div className="flex items-center gap-3">
               <span className="font-semibold text-gray-700">{isDiffMode ? '排版对照对比 (Diff Mode)' : '原文粘贴物理输入区'}</span>
               {processedText && (
@@ -92,14 +92,14 @@ export default function TextCleaner() {
             </div>
           ) : (
             <textarea
-              className="flex-1 w-full bg-transparent p-5 resize-none outline-none text-gray-800 leading-relaxed font-sans placeholder:text-gray-400 selection:bg-indigo-100 text-sm md:text-[15px]"
+              className="flex-1 w-full bg-transparent p-5 outline-none text-gray-800 leading-relaxed font-sans placeholder:text-gray-400 selection:bg-indigo-100 text-sm md:text-[15px] overflow-y-auto resize-none"
               placeholder="请在此粘贴需要清洗、排版和消除多余空格的原始文本 (支持 Markdown / PDF 粘贴段落 / 一键格式化)..."
               value={originalText}
               onChange={(e) => setOriginalText(e.target.value)}
             />
           )}
 
-          <div className="p-3 border-t border-gray-200 bg-gray-100/50 flex justify-end items-center gap-2">
+          <div className="p-3 border-t border-gray-200 bg-gray-100/50 flex justify-end items-center gap-2 shrink-0">
             {isDiffMode ? (
               <>
                 <span className="text-xs text-gray-400 mr-auto pl-2">
@@ -123,7 +123,7 @@ export default function TextCleaner() {
               <button
                 onClick={() => copyToClipboard(originalText, 'original')}
                 disabled={!originalText}
-                className="text-xs flex items-center gap-1.5 px-3.5 py-2 rounded-md text-gray-650 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-50 transition-colors font-medium cursor-pointer"
+                className="text-xs flex items-center gap-1.5 px-3.5 py-2 rounded-md text-gray-655 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-50 transition-colors font-medium cursor-pointer"
                 title="复制原输入文本"
               >
                 {copiedArea === 'original' ? (
@@ -154,8 +154,8 @@ export default function TextCleaner() {
         </div>
 
         {/* 右侧：输出区 */}
-        <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl overflow-hidden border border-gray-200 shadow-xs">
-          <div className="p-3.5 bg-gray-50 border-b border-gray-200 flex justify-between items-center text-sm font-medium text-gray-655">
+        <div className="flex-1 h-[380px] md:h-[480px] lg:h-full flex flex-col min-h-0 bg-white rounded-xl overflow-hidden border border-gray-200 shadow-xs">
+          <div className="p-3.5 bg-gray-50 border-b border-gray-200 flex justify-between items-center text-sm font-medium text-gray-655 shrink-0 select-none">
             <div className="flex items-center gap-3">
               <span className="font-semibold text-gray-700">{isDiffMode ? '原文原貌只读参考' : '清洗后最终排版输出'}</span>
               {!isDiffMode && processedText && (
@@ -181,14 +181,14 @@ export default function TextCleaner() {
             <MarkdownRenderer content={processedText} />
           ) : (
             <textarea
-              className="flex-1 w-full bg-transparent p-5 resize-none outline-none text-gray-800 leading-relaxed selection:bg-indigo-100 placeholder:text-gray-400 text-sm md:text-[15px]"
+              className="flex-1 w-full bg-transparent p-5 outline-none text-gray-800 leading-relaxed selection:bg-indigo-100 placeholder:text-gray-400 text-sm md:text-[15px] overflow-y-auto resize-none"
               placeholder={isDiffMode ? '差异模式开启中。左侧显示合并对比图示，此处展示修改前的原文内容作为参考。' : '经过中文格式化混排、空格清洗与标记过滤后的文本将即时渲染并显示在此处...'}
               value={isDiffMode ? originalText : processedText}
               readOnly
             />
           )}
 
-          <div className="p-3 border-t border-gray-200 bg-gray-55 flex justify-end items-center">
+          <div className="p-3 border-t border-gray-200 bg-gray-55 flex justify-end items-center shrink-0">
             {isDiffMode ? (
               <button
                 onClick={() => copyToClipboard(originalText, 'original_right')}

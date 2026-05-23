@@ -44,24 +44,81 @@ function InlineDiff({ oldValue, newValue }: DiffProps) {
   );
 }
 
-// Custom Line Diff Viewer component (Unified view)
+// Custom Line Diff Viewer component (Unified view with smart context-aware folding like git diff)
 function UnifiedLineDiff({ oldValue, newValue }: DiffProps) {
   const parts = diffLines(oldValue, newValue);
 
+  const allLines: {
+    type: 'added' | 'removed' | 'normal';
+    content: string;
+    oldNo: number | null;
+    newNo: number | null;
+  }[] = [];
+
   let oldLineNo = 1;
   let newLineNo = 1;
-  const renderedLines: React.ReactNode[] = [];
 
-  parts.forEach((part, partIndex) => {
+  parts.forEach((part) => {
     const lines = part.value.split('\n');
     if (lines[lines.length - 1] === '') {
       lines.pop();
     }
 
-    lines.forEach((line, lineIndex) => {
-      const key = `${partIndex}-${lineIndex}`;
-
+    lines.forEach((line) => {
       if (part.added) {
+        allLines.push({
+          type: 'added',
+          content: line,
+          oldNo: null,
+          newNo: newLineNo++,
+        });
+      } else if (part.removed) {
+        allLines.push({
+          type: 'removed',
+          content: line,
+          oldNo: oldLineNo++,
+          newNo: null,
+        });
+      } else {
+        allLines.push({
+          type: 'normal',
+          content: line,
+          oldNo: oldLineNo++,
+          newNo: newLineNo++,
+        });
+      }
+    });
+  });
+
+  const contextSize = 3;
+  const showFlags = new Array(allLines.length).fill(false);
+
+  for (let i = 0; i < allLines.length; i++) {
+    if (allLines[i].type !== 'normal') {
+      const start = Math.max(0, i - contextSize);
+      const end = Math.min(allLines.length - 1, i + contextSize);
+      for (let j = start; j <= end; j++) {
+        showFlags[j] = true;
+      }
+    }
+  }
+
+  // If there are no changes, show everything
+  const hasChanges = allLines.some(line => line.type !== 'normal');
+  const finalShowFlags = hasChanges ? showFlags : new Array(allLines.length).fill(true);
+
+  // Keep track of which hidden keys have been expanded by user click
+  const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
+
+  const renderedLines: React.ReactNode[] = [];
+  let idx = 0;
+
+  while (idx < allLines.length) {
+    if (finalShowFlags[idx]) {
+      const line = allLines[idx];
+      const key = `line-${idx}`;
+
+      if (line.type === 'added') {
         renderedLines.push(
           <div
             key={key}
@@ -69,25 +126,25 @@ function UnifiedLineDiff({ oldValue, newValue }: DiffProps) {
           >
             <div className="w-10 text-right pr-2 text-gray-400 select-none border-r border-gray-150 shrink-0"></div>
             <div className="w-10 text-right pr-2 text-emerald-600 select-none border-r border-gray-150 shrink-0">
-              {newLineNo++}
+              {line.newNo}
             </div>
             <div className="w-6 text-center text-emerald-600 font-bold select-none shrink-0">+</div>
-            <div className="flex-1 pl-2 text-emerald-900 whitespace-pre-wrap break-all">{line}</div>
+            <div className="flex-1 pl-3 text-emerald-950 whitespace-pre-wrap break-all">{line.content}</div>
           </div>
         );
-      } else if (part.removed) {
+      } else if (line.type === 'removed') {
         renderedLines.push(
           <div
             key={key}
             className="flex hover:bg-red-50/80 bg-red-50/40 border-l-4 border-red-500 py-0.5 text-xs font-mono"
           >
             <div className="w-10 text-right pr-2 text-red-600 select-none border-r border-gray-150 shrink-0">
-              {oldLineNo++}
+              {line.oldNo}
             </div>
             <div className="w-10 text-right pr-2 text-gray-400 select-none border-r border-gray-150 shrink-0"></div>
             <div className="w-6 text-center text-red-600 font-bold select-none shrink-0">-</div>
-            <div className="flex-1 pl-2 text-red-900 line-through decoration-red-300 decoration-1 whitespace-pre-wrap break-all opacity-75">
-              {line}
+            <div className="flex-1 pl-3 text-red-950 line-through decoration-red-300 decoration-1 whitespace-pre-wrap break-all opacity-75">
+              {line.content}
             </div>
           </div>
         );
@@ -95,23 +152,84 @@ function UnifiedLineDiff({ oldValue, newValue }: DiffProps) {
         renderedLines.push(
           <div key={key} className="flex hover:bg-gray-100/60 py-0.5 text-xs font-mono">
             <div className="w-10 text-right pr-2 text-gray-400 select-none border-r border-gray-150 shrink-0">
-              {oldLineNo++}
+              {line.oldNo}
             </div>
             <div className="w-10 text-right pr-2 text-gray-400 select-none border-r border-gray-150 shrink-0">
-              {newLineNo++}
+              {line.newNo}
             </div>
             <div className="w-6 text-center text-gray-300 select-none shrink-0"> </div>
-            <div className="flex-1 pl-2 text-gray-700 whitespace-pre-wrap break-all">{line}</div>
+            <div className="flex-1 pl-3 text-gray-700 whitespace-pre-wrap break-all">{line.content}</div>
           </div>
         );
       }
-    });
-  });
+      idx++;
+    } else {
+      // Find range of contiguous hidden lines
+      const startIdx = idx;
+      let hiddenCount = 0;
+      while (idx < allLines.length && !finalShowFlags[idx]) {
+        hiddenCount++;
+        idx++;
+      }
+
+      const key = `hidden-${startIdx}-${idx}`;
+      const isExpanded = !!expandedKeys[key];
+
+      if (isExpanded) {
+        // Render them as normal unchanged lines with a subtle blue/indigo indicator bar to show they are expanded
+        for (let j = startIdx; j < idx; j++) {
+          const line = allLines[j];
+          const lineKey = `line-${j}`;
+          renderedLines.push(
+            <div key={lineKey} className="flex hover:bg-blue-50/45 bg-indigo-50/15 py-0.5 text-xs font-mono border-l-4 border-indigo-200">
+              <div className="w-10 text-right pr-2 text-gray-400 select-none border-r border-gray-150 shrink-0">
+                {line.oldNo}
+              </div>
+              <div className="w-10 text-right pr-2 text-gray-400 select-none border-r border-gray-150 shrink-0">
+                {line.newNo}
+              </div>
+              <div className="w-6 text-center text-gray-300 select-none shrink-0"> </div>
+              <div className="flex-1 pl-3 text-gray-600 whitespace-pre-wrap break-all">{line.content}</div>
+            </div>
+          );
+        }
+      } else {
+        const firstHiddenLine = allLines[startIdx];
+        const startOld = firstHiddenLine.oldNo || 0;
+        const startNew = firstHiddenLine.newNo || 0;
+
+        renderedLines.push(
+          <div
+            key={key}
+            className="flex bg-indigo-50/40 border-l-4 border-indigo-400 py-1.5 text-xs font-mono text-indigo-600 font-medium select-none items-center"
+          >
+            <div className="w-20 text-center text-[10px] text-indigo-400 select-none border-r border-gray-150 shrink-0 tracking-widest font-bold">
+              •••
+            </div>
+            <div className="flex-1 pl-4 flex items-center justify-between pr-4">
+              <span className="text-indigo-700/90 text-[11px]">
+                {`@@ -${startOld} +${startNew} @@ 已折叠 ${hiddenCount} 行无变化文本`}
+              </span>
+              <button
+                onClick={() => setExpandedKeys(prev => ({ ...prev, [key]: true }))}
+                className="text-[10px] font-semibold text-indigo-700 hover:text-indigo-900 bg-white border border-indigo-200 hover:border-indigo-400 px-2 py-0.5 rounded shadow-3xs cursor-pointer hover:bg-indigo-50 active:scale-[0.98] transition-all"
+                type="button"
+              >
+                展开 {hiddenCount} 行
+              </button>
+            </div>
+          </div>
+        );
+      }
+    }
+  }
 
   return (
     <div className="overflow-auto h-full bg-[#fdfdfd] border border-gray-100 rounded-lg flex flex-col min-h-0 select-text">
       <div className="flex-1 overflow-auto py-2">
-        {renderedLines.length === 0 ? (
+        {allLines.length === 0 ? (
+          <div className="p-8 text-center text-gray-450 text-sm">暂无文本进行对比</div>
+        ) : renderedLines.length === 0 ? (
           <div className="p-8 text-center text-gray-400 text-sm">文本无任何明显差异</div>
         ) : (
           renderedLines

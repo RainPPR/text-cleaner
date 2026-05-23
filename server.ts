@@ -22,7 +22,7 @@ async function startServer() {
       // Handle the strict line merge (Nowrap) and Multi-newline compression
       if (strictNowrap) {
         const lines = result.split('\n');
-        const blocks: { type: 'code' | 'math' | 'html' | 'prose'; line: string }[] = [];
+        const blocks: { type: 'code' | 'math' | 'html' | 'table' | 'empty_line' | 'prose'; line: string }[] = [];
         
         let inCodeBlock = false;
         let inMathBlock = false;
@@ -66,44 +66,39 @@ async function startServer() {
             continue;
           }
 
-          // Regular prose line (can be text or empty)
-          blocks.push({ type: 'prose', line });
-        }
-
-        // 1. Compress consecutive empty prose lines (2 or more empty lines -> 1 empty line)
-        const compressedBlocks: typeof blocks = [];
-        let consecutiveEmptyCount = 0;
-
-        for (let i = 0; i < blocks.length; i++) {
-          const block = blocks[i];
-          if (block.type === 'prose' && block.line.trim() === '') {
-            consecutiveEmptyCount++;
-            if (consecutiveEmptyCount === 1) {
-              compressedBlocks.push(block);
-            }
-          } else {
-            consecutiveEmptyCount = 0;
-            compressedBlocks.push(block);
-          }
-        }
-
-        // 2. Strict line merging inside prose
-        const finalBlocks: typeof compressedBlocks = [];
-
-        for (let i = 0; i < compressedBlocks.length; i++) {
-          const current = compressedBlocks[i];
-
-          // If current block is not prose, or is an empty prose line, we can't merge it.
-          if (current.type !== 'prose' || current.line.trim() === '') {
-            finalBlocks.push(current);
+          // Table lines - any line containing a table character '|' (excluding code and math blocks)
+          if (line.includes('|')) {
+            blocks.push({ type: 'table', line });
             continue;
           }
 
-          if (finalBlocks.length > 0) {
-            const prevIndex = finalBlocks.length - 1;
-            const prev = finalBlocks[prevIndex];
+          // Empty line
+          if (trimmed === '') {
+            blocks.push({ type: 'empty_line', line: '' });
+            continue;
+          }
 
-            if (prev.type === 'prose' && prev.line.trim() !== '') {
+          // Regular prose line
+          blocks.push({ type: 'prose', line });
+        }
+
+        // 1. Strict line merging inside prose (merging consecutive non-empty prose lines of the same paragraph)
+        const mergedBlocks: typeof blocks = [];
+
+        for (let i = 0; i < blocks.length; i++) {
+          const current = blocks[i];
+
+          // If current block is not prose, we can't merge it.
+          if (current.type !== 'prose') {
+            mergedBlocks.push(current);
+            continue;
+          }
+
+          if (mergedBlocks.length > 0) {
+            const prevIndex = mergedBlocks.length - 1;
+            const prev = mergedBlocks[prevIndex];
+
+            if (prev.type === 'prose') {
               const currentTrimmed = current.line.trim();
               const prevTrimmed = prev.line.trim();
 
@@ -118,14 +113,14 @@ async function startServer() {
                 currentTrimmed.length > 0 &&
                 prevTrimmed.length > 0
               ) {
-                // Determine whether to add a space when joining.
+                // Merge current line into previous line
                 const lastCharOfPrev = prevTrimmed.slice(-1);
                 const firstCharOfCurrent = currentTrimmed.charAt(0);
                 
                 const isChinese = (char: string) => /[\u4e00-\u9fa5]/.test(char);
                 const needsSpace = !(isChinese(lastCharOfPrev) && isChinese(firstCharOfCurrent));
 
-                finalBlocks[prevIndex] = {
+                mergedBlocks[prevIndex] = {
                   type: 'prose',
                   line: prev.line + (needsSpace ? ' ' : '') + current.line.trim(),
                 };
@@ -134,7 +129,23 @@ async function startServer() {
             }
           }
 
-          finalBlocks.push(current);
+          mergedBlocks.push(current);
+        }
+
+        // 2. Collapse consecutive empty lines: keep at most a single empty_line block in any run of consecutive empty_lines.
+        const finalBlocks: typeof mergedBlocks = [];
+
+        for (let i = 0; i < mergedBlocks.length; i++) {
+          const block = mergedBlocks[i];
+
+          if (block.type === 'empty_line') {
+            // If the last block in finalBlocks is already an empty line, discard this duplicate empty line
+            if (finalBlocks.length > 0 && finalBlocks[finalBlocks.length - 1].type === 'empty_line') {
+              continue;
+            }
+          }
+
+          finalBlocks.push(block);
         }
 
         result = finalBlocks.map((b) => b.line).join('\n');
