@@ -1,7 +1,7 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
-import { format as autocorrectFormat } from 'autocorrect-node';
+import { format as autocorrectFormat } from '@huacnlee/autocorrect';
 
 async function startServer() {
   const app = express();

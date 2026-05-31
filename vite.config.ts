@@ -2,10 +2,14 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
+import wasm from 'vite-plugin-wasm';
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), wasm()],
+    build: {
+      target: 'esnext',
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

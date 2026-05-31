@@ -1,4 +1,4 @@
-import pangu from 'pangu';
+import { format as autocorrectFormat } from '@huacnlee/autocorrect';
 import { CleanTextArgs } from '../types';
 
 /**
@@ -150,18 +150,14 @@ export async function formatBasicText(args: CleanTextArgs): Promise<string> {
     finalBlocks.push(block);
   }
 
-  // 3. Apply CJK / English auto-spacing to prose blocks only (using the lightweight pangu client-side engine)
+  // 3. Apply CJK / English auto-spacing to prose blocks only
   for (let i = 0; i < finalBlocks.length; i++) {
     const block = finalBlocks[i];
     if (block.type === 'prose') {
       let formattedLine = block.line;
 
-      // Use pangu spacing on the prose line
-      try {
-        formattedLine = pangu.spacing(formattedLine);
-      } catch (err) {
-        console.error('Pangu formatting error:', err);
-      }
+      // Use the official autocorrect WASM spacing
+      formattedLine = autocorrectFormat(formattedLine);
 
       // CJK Clean spacing between double fullwidth characters
       const FULLWIDTH = '[\\u4E00-\\u9FFF\\u3400-\\u4DBF\\u3000-\\u303F\\u3040-\\u309F\\u30A0-\\u30FF\\uFF00-\\uFFEF]';
